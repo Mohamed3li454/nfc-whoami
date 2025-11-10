@@ -1,0 +1,285 @@
+<!doctype html>
+<!--
+  index.html
+  Single-file page for NFC ring -> "Who am I" theme (dark, hacker/mystery).
+  Small comments only: change theme colors or heading text below.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Who am I</title>
+
+  <!-- Google Font: change here if you want -->
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --bg:#050507;
+      --panel:#0b0b0f;
+      --muted:#9aa0a6;
+      --accent:#00ff9c;
+      --glow: 0 0 18px rgba(0,255,156,0.12), 0 0 60px rgba(0,255,156,0.04);
+      --glass: rgba(255,255,255,0.02);
+    }
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#020203 0%, #07070a 100%);font-family:'JetBrains Mono', monospace;color:#e6eef3}
+    .center{
+      min-height:100vh;display:flex;align-items:center;justify-content:center;padding:32px;
+    }
+    .card{
+      width:100%;max-width:920px;padding:36px 38px;border-radius:14px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));box-shadow:var(--glow);
+      border:1px solid rgba(255,255,255,0.03);
+      backdrop-filter: blur(6px);
+      display:flex;gap:28px;align-items:center;flex-direction:column;text-align:center;
+    }
+
+    /* Who am I styling */
+    .who{
+      font-size:clamp(28px,6vw,56px);letter-spacing:0.08em;position:relative;
+      color:var(--accent);text-shadow:0 0 18px rgba(0,255,156,0.06);
+      display:inline-block;line-height:1;
+      padding:6px 10px;border-radius:6px;
+    }
+
+    /* typing cursor */
+    .typed{border-right:2px solid rgba(230,238,243,0.18);padding-right:6px;animation:blink 1s steps(2) infinite;}
+    @keyframes blink{50%{border-color:transparent}}
+
+    /* glitch effect layers */
+    .glitch{
+      position:relative;display:inline-block;
+    }
+    .glitch::before,.glitch::after{
+      content:attr(data-text);
+      position:absolute;left:0;top:0;
+      width:100%;
+      opacity:0.8;
+      clip-path:polygon(0 0, 100% 0, 100% 45%, 0 45%);
+    }
+    .glitch::before{transform:translate(-2px,-1px);color:#fff;mix-blend-mode:screen;filter:blur(0.2px)}
+    .glitch::after{transform:translate(2px,2px);color:rgba(255,0,128,0.7);mix-blend-mode:screen;filter:blur(0.6px)}
+    .glitch.flicker{animation:glitchAnim 1.2s linear 1;}
+    @keyframes glitchAnim{
+      0%{transform:none}
+      20%{transform:skewX(-6deg)}
+      40%{transform:translateX(-6px)}
+      60%{transform:skewX(3deg) translateY(-2px)}
+      100%{transform:none}
+    }
+
+    /* info panel */
+    .info{
+      width:100%;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-top:18px;
+    }
+    .tile{
+      background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+      border:1px solid rgba(255,255,255,0.025);
+      padding:14px;border-radius:10px;text-align:left;
+    }
+    .label{font-size:12px;color:var(--muted);margin-bottom:6px}
+    .value{font-size:16px;color:#e6fff5;word-break:break-word}
+
+    .big{
+      margin-top:18px;font-size:13px;color:var(--muted)
+    }
+
+    /* spinner while IP loads */
+    .spinner{height:18px;width:18px;border-radius:50%;border:2px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite;margin:0 auto}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* responsive */
+    @media (max-width:520px){
+      .card{padding:26px}
+      .who{font-size:34px}
+    }
+  </style>
+</head>
+<body>
+  <div class="center">
+    <div class="card" role="main" aria-live="polite">
+      <div id="headline">
+        <div id="whoContainer">
+          <span id="who" class="who typed glitch" data-text="Who am I">Who am I</span>
+        </div>
+      </div>
+
+      <div id="status" class="big" aria-hidden="false">Initializing...</div>
+
+      <div id="meta" class="info" style="display:none" aria-hidden="true">
+        <div class="tile">
+          <div class="label">Device</div>
+          <div id="device" class="value">-</div>
+        </div>
+        <div class="tile">
+          <div class="label">Operating System</div>
+          <div id="os" class="value">-</div>
+        </div>
+        <div class="tile">
+          <div class="label">Browser</div>
+          <div id="browser" class="value">-</div>
+        </div>
+        <div class="tile">
+          <div class="label">Public IP</div>
+          <div id="ip" class="value">-</div>
+        </div>
+      </div>
+
+      <div id="footer" class="big" style="opacity:0.7">No tracking · Local-only detection · For NFC ring</div>
+    </div>
+  </div>
+
+  <script>
+    // ========= Minimal notes (change these variables if you want) =========
+    // api endpoint for public IP (mandatory fetch)
+    const IP_API = 'https://api.ipify.org?format=json';
+    // change heading text here if desired:
+    const HEADING_TEXT = 'Who am I';
+    // ====================================================================
+
+    // helpers: safe text
+    const t = s => String(s ?? '').trim();
+
+    // write heading text
+    const whoEl = document.getElementById('who');
+    whoEl.textContent = HEADING_TEXT;
+    whoEl.setAttribute('data-text', HEADING_TEXT);
+
+    const status = document.getElementById('status');
+    const meta = document.getElementById('meta');
+
+    // 1) typing animation (then glitch)
+    function typeThenReveal(text, cb){
+      const el = whoEl;
+      el.classList.add('typed');
+      el.textContent = '';
+      let i=0;
+      const speed = 70;
+      const iv = setInterval(()=>{
+        el.textContent = text.slice(0, ++i);
+        if(i >= text.length){
+          clearInterval(iv);
+          el.classList.remove('typed');
+          // small pause then glitch
+          setTimeout(()=>{ el.classList.add('flicker'); setTimeout(()=>{ el.classList.remove('flicker'); cb(); },800); },400);
+        }
+      }, speed);
+    }
+
+    // 2) better OS detection (mobile-aware)
+    function detectOS(){
+      // prefer navigator.userAgentData if available (more structured)
+      const uaData = navigator.userAgentData;
+      const ua = navigator.userAgent || '';
+      let platform = '';
+      if(uaData && uaData.platform){
+        platform = uaData.platform;
+      } else if(navigator.platform){
+        platform = navigator.platform;
+      } else {
+        platform = ua;
+      }
+
+      platform = platform.toLowerCase();
+
+      // common checks
+      if(/android/.test(ua) || /android/.test(platform)) return 'Android';
+      if(/iphone/.test(ua) || /ipod/.test(ua)) return 'iPhone iOS';
+      if(/ipad/.test(ua) || (/macintosh/.test(ua) && navigator.maxTouchPoints && navigator.maxTouchPoints > 1)) return 'iPad iOS';
+      if(/windows/.test(platform) || /win32/.test(platform)) return 'Windows';
+      if(/mac/.test(platform) || /macintosh/.test(ua)) return 'macOS';
+      if(/linux/.test(platform)) return 'Linux';
+      return 'Unknown';
+    }
+
+    // 3) better browser detection (handles iOS Chrome/Firebase cases)
+    function detectBrowser(){
+      const ua = navigator.userAgent || '';
+      const uaData = navigator.userAgentData;
+      // first try userAgentData brands (Chromium-based browsers on some platforms)
+      if(uaData && uaData.brands){
+        const brandStr = uaData.brands.map(b=>b.brand+' '+b.version).join('; ');
+        // try to pick known
+        if(/chrome/i.test(brandStr) && !/edg/i.test(brandStr)) return 'Chrome';
+        if(/safari/i.test(brandStr) && !/chrome/i.test(brandStr)) return 'Safari';
+        if(/firefox/i.test(brandStr)) return 'Firefox';
+        if(/edge/i.test(brandStr) || /edg/i.test(brandStr)) return 'Edge';
+      }
+      // fallback to userAgent parsing (special iOS tokens)
+      if(/CriOS/i.test(ua) || /Chrome/i.test(ua) && !/Safari/i.test(ua)) return 'Chrome';
+      if(/FxiOS/i.test(ua) || /Firefox/i.test(ua)) return 'Firefox';
+      if(/Edg/i.test(ua)) return 'Edge';
+      if(/Safari/i.test(ua) && !/CriOS/i.test(ua) && !/Chrom(e|ium)/i.test(ua)) return 'Safari';
+      if(/OPR|Opera/i.test(ua)) return 'Opera';
+      // as last resort try presence of "Chrome" or "Safari"
+      if(/Chrome/i.test(ua)) return 'Chrome';
+      if(/Safari/i.test(ua)) return 'Safari';
+      return 'Unknown';
+    }
+
+    // 4) device type
+    function deviceType(){
+      const ua = navigator.userAgent || '';
+      if(/mobile/i.test(ua)) return 'Mobile';
+      if(/tablet|ipad|playbook|silk/i.test(ua)) return 'Tablet';
+      return 'Desktop';
+    }
+
+    // 5) fetch public IP (mandatory). This runs immediately.
+    async function fetchIP(){
+      try{
+        const res = await fetch(IP_API, {cache:'no-store'});
+        if(!res.ok) throw new Error('IP fetch failed');
+        const j = await res.json();
+        return j.ip || 'Unknown';
+      }catch(e){
+        console.error('IP error', e);
+        throw e;
+      }
+    }
+
+    // assemble and display
+    async function revealAll(){
+      status.textContent = 'Scanning device...';
+      // mandatory: fetch IP first (wait)
+      try{
+        const ipVal = await fetchIP(); // will throw if fails
+        const osVal = detectOS();
+        const browserVal = detectBrowser();
+        const dev = deviceType();
+
+        // fill values
+        document.getElementById('ip').textContent = ipVal;
+        document.getElementById('os').textContent = osVal;
+        document.getElementById('browser').textContent = browserVal;
+        document.getElementById('device').textContent = dev;
+
+        status.textContent = 'Revealed.';
+        meta.style.display = 'grid';
+        meta.setAttribute('aria-hidden','false');
+      }catch(err){
+        // mandatory fetch failed: show message and still try to fill client-only info
+        document.getElementById('ip').textContent = 'Unable to fetch public IP';
+        document.getElementById('os').textContent = detectOS();
+        document.getElementById('browser').textContent = detectBrowser();
+        document.getElementById('device').textContent = deviceType();
+        status.textContent = 'Partial reveal — IP lookup failed.';
+        meta.style.display = 'grid';
+        meta.setAttribute('aria-hidden','false');
+      }
+    }
+
+    // INIT sequence: type animation then reveal
+    (function init(){
+      status.textContent = 'Waking up the system...';
+      typeThenReveal(HEADING_TEXT, async ()=>{
+        status.textContent = 'Fetching public IP and device info...';
+        // ensure IP fetch is mandatory and runs now
+        await revealAll();
+      });
+    })();
+
+    // Accessibility: focus main
+    document.querySelector('.card').focus?.();
+  </script>
+</body>
+</html>
